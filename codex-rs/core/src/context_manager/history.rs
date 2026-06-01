@@ -370,6 +370,9 @@ impl ContextManager {
         // all outputs must have a corresponding function/tool call
         normalize::remove_orphan_outputs(&mut self.items);
 
+        // strip assistant messages with empty content (caused by stream disconnects)
+        normalize::remove_empty_assistant_messages(&mut self.items);
+
         // strip images when model does not support them
         normalize::strip_images_when_unsupported(input_modalities, &mut self.items);
     }

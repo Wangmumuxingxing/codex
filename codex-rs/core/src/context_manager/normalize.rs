@@ -6,10 +6,36 @@ use codex_protocol::openai_models::InputModality;
 use std::collections::HashSet;
 
 use crate::util::error_or_panic;
-use tracing::info;
+use tracing::{info, warn};
 
 const IMAGE_CONTENT_OMITTED_PLACEHOLDER: &str =
     "image content omitted because you do not support image input";
+/// Remove assistant messages with no content and no tool calls.
+/// These can appear when stream disconnects mid-response, and the
+/// partially-received message gets persisted with empty content.
+/// The OpenAI API rejects such messages with:
+/// "Invalid assistant message: content or tool_calls must be set"
+pub(crate) fn remove_empty_assistant_messages(items: &mut Vec<ResponseItem>) {
+    let original_len = items.len();
+    items.retain(|item| match item {
+        ResponseItem::Message { role, content, .. } => {
+            if role == "assistant" && content.is_empty() {
+                warn!("Removing assistant message with empty content from history");
+                false
+            } else {
+                true
+            }
+        }
+        _ => true,
+    });
+    if items.len() < original_len {
+        info!(
+            "Stripped {} empty assistant message(s)",
+            original_len - items.len()
+        );
+    }
+}
+
 
 pub(crate) fn ensure_call_outputs_present(items: &mut Vec<ResponseItem>) {
     // Collect synthetic outputs to insert immediately after their calls.
